@@ -51,9 +51,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: ${{ steps.detect-package-manager.outputs.manager }}
       - name: Setup Pages
+        id: pages
         uses: actions/configure-pages@v5
       - name: Restore cache
         uses: actions/cache@v4
@@ -67,21 +68,10 @@ jobs:
             ${{ runner.os }}-nextjs-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}-
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
-      - name: Resolve deployment URLs
-        id: deployment-urls
-        run: |
-          if [ -f public/CNAME ]; then
-            CUSTOM_DOMAIN=$(head -n 1 public/CNAME | tr -d '\r\n')
-            echo "base_path=" >> "$GITHUB_OUTPUT"
-            echo "site_url=https://${CUSTOM_DOMAIN}" >> "$GITHUB_OUTPUT"
-          else
-            echo "base_path=/${{ github.event.repository.name }}" >> "$GITHUB_OUTPUT"
-            echo "site_url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}" >> "$GITHUB_OUTPUT"
-          fi
       - name: Build with Next.js
         env:
-          NEXT_PUBLIC_BASE_PATH: ${{ steps.deployment-urls.outputs.base_path }}
-          NEXT_PUBLIC_SITE_URL: ${{ steps.deployment-urls.outputs.site_url }}
+          NEXT_PUBLIC_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          NEXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.origin }}${{ steps.pages.outputs.base_path }}
         run: ${{ steps.detect-package-manager.outputs.runner }} next build
       - name: Disable Jekyll
         run: touch out/.nojekyll
