@@ -2,31 +2,38 @@ import Link from 'next/link';
 
 const sections = [
   {
-    href: '/docs/getting-started',
+    href: '/docs/getting-started/installation',
     title: 'Getting Started',
     subtitle: 'Быстрый старт',
     description: 'Правильная установка Boilerplate, настройка Git-связей.',
     accent: 'from-emerald-500/20 via-emerald-500/5 to-transparent',
   },
   {
-    href: '/docs/core-architecture',
+    href: '/docs/core-architecture/project-structure',
     title: 'Architecture',
     subtitle: 'Архитектура и Ядро',
     description: 'Правило "Святого ядра", Feature Toggles и системные настройки.',
     accent: 'from-sky-500/20 via-sky-500/5 to-transparent',
   },
   {
-    href: '/docs/cpt-and-data',
+    href: '/docs/developer-guides/creating-cpt-archives',
+    title: 'Developer Guides',
+    subtitle: 'Инструкции по разработке',
+    description: 'Создание CPT, блоков Gutenberg и шаблоны промптов для ИИ.',
+    accent: 'from-indigo-500/20 via-indigo-500/5 to-transparent',
+  },
+  {
+    href: '/docs/cpt-and-data/data-structures',
     title: 'Content',
     subtitle: 'Работа с контентом',
     description: 'Narrative CPT (Gutenberg) и Structured CPT (Carbon Fields).',
     accent: 'from-purple-500/20 via-purple-500/5 to-transparent',
   },
   {
-    href: '/docs/frontend-and-blocks',
+    href: '/docs/frontend-and-blocks/visual-layer',
     title: 'Frontend',
     subtitle: 'Визуальный слой',
-    description: 'Трехуровневая система CSS токенов, БЭМ и блоки Gutenberg.',
+    description: 'Трехуровневая система CSS токенов, БЭМ и стили.',
     accent: 'from-amber-500/20 via-amber-500/5 to-transparent',
   },
 ] as const;
