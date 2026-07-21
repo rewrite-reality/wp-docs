@@ -1,4 +1,4 @@
 {
-  "title": "Git Workflow",
-  "pages": ["index"]
+  "title": "Инфраструктура и Процессы",
+  "pages": ["development-process", "infrastructure-cicd"]
 }

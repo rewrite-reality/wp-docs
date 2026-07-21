@@ -1,4 +1,4 @@
 {
   "title": "Архитектура и Ядро",
-  "pages": ["index"]
+  "pages": ["project-structure", "core-logic", "integrations-ajax", "admin-security"]
 }

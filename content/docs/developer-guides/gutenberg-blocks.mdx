@@ -1,0 +1,137 @@
+---
+title: Разработка Gutenberg Блоков
+description: Создание кастомных блоков на стороне сервера (Dynamic Blocks), процесс верстки и промпты для ИИ.
+---
+
+# Блоки Gutenberg и Паттерны
+
+Этот раздел посвящен разработке кастомных блоков. В бойлерплейте используется плагин `plugins/blocks-agency/`. Все блоки, которые мы создаем — это **Dynamic Blocks** (Динамические блоки). Они рендерятся на стороне сервера (PHP), а не сохраняют статический HTML в базу данных. Это позволяет менять верстку блока в будущем, и она мгновенно обновится на всех страницах!
+
+---
+
+## 1. Обязательный процесс: Верстка перед "натяжкой"
+
+Разработка нового блока должна строго следовать нашему пайплайну. **Мы не пишем Gutenberg-блоки сразу набело в React/PHP.**
+
+<Steps>
+  <Step title="Этап чистой верстки">
+    Сначала создается чистый, изолированный HTML/CSS/JS для компонента.
+  </Step>
+  <Step title="Изоляция стилей и скриптов">
+    Каждый блок должен иметь свой собственный CSS-файл и, при необходимости, JS-скрипт. Стили пишутся строго по БЭМ с использованием трехуровневой системы токенов (без жестких пикселей). Вся интерактивность пишется на чистом Vanilla JS (ES6+ классы, никакого jQuery).
+  </Step>
+  <Step title="Интеграция в WP (Через ИИ)">
+    Только после того, как верстка протестирована, она (вместе со стилями и скриптами) трансформируется в нативный Gutenberg-блок. Вы можете сделать это руками (см. инструкцию ниже) или использовать ИИ-агента.
+  </Step>
+</Steps>
+
+## 🤖 Промпт-генератор для ИИ
+Если вы хотите поручить создание блока ИИ, скопируйте этот промпт и приложите к нему вашу готовую верстку:
+
+```text
+Ты Senior WordPress Developer. Я сверстал новый UI-компонент (HTML/CSS/JS).
+Твоя задача — превратить его в динамический Gutenberg-блок для плагина `blocks-agency`.
+
+Требования:
+1. Создай конфигурацию `block.json` (без функции save, используй render: file:./render.php).
+2. Напиши `edit.js` с использованием InspectorControls для настройки параметров (заголовки, тексты, цвета).
+3. Напиши `render.php`, куда перенеси мою HTML-разметку. Выведи в нее атрибуты из $attributes.
+4. Убедись, что стили и скрипты подключаются изолированно (CSS on-demand).
+
+Вот моя верстка:
+[ВСТАВИТЬ HTML/CSS/JS]
+```
+
+---
+
+## 2. Анатомия блока (На примере `agency/services`)
+
+Исходники блоков лежат в папке `src/`. Рассмотрим внутреннее устройство на примере блока `src/blocks-services/`.
+
+### 2.1. Конфигурация (`block.json`)
+Файл `block.json` — это сердце блока. Здесь задаются название, атрибуты и пути.
+
+```json
+{
+    "name": "agency/services",
+    "title": "Услуги (Сетка)",
+    "category": "widgets",
+    "attributes": {
+        "title": {
+            "type": "string",
+            "default": "ОСНОВНЫЕ НАПРАВЛЕНИЯ"
+        }
+    },
+    "editorScript": "file:./index.js",
+    "render": "file:./render.php"
+}
+```
+<Callout type="info">
+  **Обратите внимание:** У нас нет функции `save` в `block.json`, вместо нее используется серверный `"render": "file:./render.php"`.
+</Callout>
+
+### 2.2. Интерфейс Редактора (`edit.js`)
+Этот файл отвечает за то, как блок выглядит и управляется в админке (React). Мы импортируем `InspectorControls` (боковая панель настроек) и `RichText` (для редактирования текста прямо на холсте).
+
+```javascript
+import { InspectorControls, RichText } from '@wordpress/block-editor';
+import { PanelBody, TextControl } from '@wordpress/components';
+
+export default function Edit( { attributes, setAttributes } ) {
+    return (
+        <div { ...useBlockProps() }>
+            {/* Рендер на холсте редактора */}
+            <RichText
+                tagName="h2"
+                value={ attributes.title }
+                onChange={ ( val ) => setAttributes( { title: val } ) }
+            />
+            {/* Placeholder сетки услуг для наглядности */}
+        </div>
+    );
+}
+```
+
+### 2.3. Серверный рендер (`render.php`)
+Это PHP-файл, который отвечает за вывод блока на сайте. Он получает массив `$attributes`.
+
+```php
+<?php
+$title = $attributes['title'] ?? 'ОСНОВНЫЕ НАПРАВЛЕНИЯ';
+
+// Запрашиваем 6 последних услуг из БД
+$services_query = new WP_Query( [
+    'post_type'      => 'services',
+    'posts_per_page' => 6,
+] );
+?>
+
+<section class="section services-block" <?php echo get_block_wrapper_attributes(); ?>>
+    <div class="container">
+        <h2><?php echo esc_html($title); ?></h2>
+        
+        <div class="services-grid">
+            <?php while ( $services_query->have_posts() ) : $services_query->the_post(); ?>
+                <!-- Вывод карточки услуги (HTML) -->
+            <?php endwhile; wp_reset_postdata(); ?>
+        </div>
+    </div>
+</section>
+```
+
+---
+
+## 3. Сборка и создание новых блоков вручную
+
+Исходники блоков лежат в `src/`, но WordPress читает скомпилированный код из `build/`. 
+
+### Как создать свой новый блок руками?
+
+1. Зайдите в терминале в `plugins/blocks-agency/`.
+2. Выполните команду `npx @wordpress/create-block --no-plugin`.
+3. Скрипт спросит название (например, `agency/testimonials`).
+4. Новая папка появится в `src/testimonials/`.
+5. Откройте сгенерированный `block.json` и добавьте `"render": "file:./render.php"`.
+6. Создайте `render.php` и напишите там HTML-разметку блока. 
+7. **Удалите файл `save.js`**, он нам не нужен для динамических блоков!
+8. Выполните `npm run start` (для разработки) или `npm run build` (для продакшена). Блок готов!

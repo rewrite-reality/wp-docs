@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "getting-started",
+    "developer-guides",
     "core-architecture",
     "cpt-and-data",
     "frontend-and-blocks",

@@ -1,4 +1,4 @@
 {
   "title": "Быстрый старт",
-  "pages": ["index"]
+  "pages": ["index", "installation", "global-prompt"]
 }

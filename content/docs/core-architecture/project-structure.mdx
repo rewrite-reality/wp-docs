@@ -1,0 +1,142 @@
+---
+title: Структура проекта
+description: Подробная карта Boilerplate. Где искать бизнес-логику, стили и блоки.
+---
+
+# Структура файлов и папок (Boilerplate Map)
+
+Этот документ поможет быстро сориентироваться в архитектуре нашего Boilerplate. Проект жестко разделен на слои: инфраструктура, бизнес-логика (ядро), визуальный слой (тема) и изолированные блоки.
+
+---
+
+## Инфраструктура (Корень проекта)
+
+В корне лежат конфигурации для развертывания, CI/CD пайплайнов и управления зависимостями.
+
+<Files>
+  <Folder name="uv-wordpress" defaultOpen>
+    <Folder name=".github" defaultOpen>
+      <Folder name="workflows">
+        <Folder name="scripts" />
+        <File name="CICD.yml" />
+      </Folder>
+    </Folder>
+    <Folder name="docs" defaultOpen>
+      <Folder name="analytics" />
+      <Folder name="developer-guide" />
+    </Folder>
+    <File name="docker-compose.yml" />
+    <File name="docker-compose.light.yml" />
+    <File name="wp-version-control.cfg" />
+    <File name="composer.json" />
+  </Folder>
+</Files>
+
+<Callout type="info">
+  **Для чего это нужно:** 
+  `CICD.yml` управляет пайплайнами деплоя, а Docker-файлы позволяют быстро поднять проект локально. Облегченный `docker-compose.light.yml` используется для быстрой работы без монтирования всего ядра WordPress.
+</Callout>
+
+---
+
+## Плагины ядра (`mu-plugins/`)
+
+Здесь лежит **вся бизнес-логика** сайта. Эти плагины (`Must-Use Plugins`) загружаются WordPress автоматически до инициализации темы, и их нельзя отключить из админки.
+
+<Files>
+  <Folder name="mu-plugins" defaultOpen>
+    <File name="ag-login-limiter.php" />
+    <File name="ag-webp-converter.php" />
+    <File name="wp-migrate-db-pro-compatibility.php" />
+    <File name="agency-core-loader.php" />
+    <Folder name="agency-b2b-core" defaultOpen>
+      <Folder name="admin" />
+      <Folder name="ajax" />
+      <Folder name="custom-fields" />
+      <Folder name="integrations">
+        <Folder name="algolia" />
+        <File name="cf7-leads.php" />
+        <File name="telegram.php" />
+        <File name="rankmath.php" />
+      </Folder>
+      <Folder name="post-types" />
+      <Folder name="taxonomies" />
+      <Folder name="security" />
+    </Folder>
+  </Folder>
+</Files>
+
+<Callout type="warning">
+  **Правило Святого Ядра:** Папка `agency-b2b-core/` — это святая земля. В клиентских проектах её **нельзя редактировать или удалять**, иначе будут Git-конфликты при получении обновлений (Upstream). Любая кастомизация делается в отдельном `mu-plugins/client-core.php`.
+</Callout>
+
+---
+
+## Визуальный слой (`themes/`)
+
+Папка темы `agency-starter-theme` отвечает **исключительно за рендер и визуал**. Никакой бизнес-логики (регистрации CPT, сложных хуков API) здесь быть не должно!
+
+<Files>
+  <Folder name="themes" defaultOpen>
+    <Folder name="agency-starter-theme" defaultOpen>
+      <Folder name="assets">
+        <Folder name="css">
+          <Folder name="components" />
+          <Folder name="templates" />
+        </Folder>
+        <Folder name="js" />
+      </Folder>
+      <Folder name="inc">
+        <File name="setup.php" />
+        <File name="template-tags.php" />
+      </Folder>
+      <Folder name="sass" />
+      <Folder name="template-parts">
+        <Folder name="catalog" />
+        <Folder name="header" />
+        <Folder name="modals" />
+        <Folder name="components" />
+      </Folder>
+      <File name="functions.php" />
+      <File name="style.css" />
+      <File name="package.json" />
+      <File name="header.php" />
+      <File name="footer.php" />
+      <File name="index.php" />
+      <File name="single-catalog_product.php" />
+      <File name="archive-catalog_product.php" />
+    </Folder>
+  </Folder>
+</Files>
+
+### Ключевые концепции темы:
+* **БЭМ-компоненты:** Папка `template-parts/` декомпозирована на мелкие UI-элементы.
+* **Изоляция стилей:** CSS разбит по компонентам и шаблонам. Подключение стилей происходит строго "on-demand" (по требованию) через `functions.php`.
+* **Жесткие шаблоны:** Страницы вроде `single-catalog_product.php` рендерятся через классический PHP на основе данных из Carbon Fields, без участия Gutenberg.
+
+---
+
+## Кастомные блоки (`plugins/blocks-agency/`)
+
+Мы используем нативный Gutenberg, расширяя его своими блоками. Этот плагин генерируется через пакет `@wordpress/create-block`.
+
+<Files>
+  <Folder name="plugins" defaultOpen>
+    <Folder name="blocks-agency" defaultOpen>
+      <Folder name="src" defaultOpen>
+        <Folder name="blocks-services">
+          <File name="block.json" />
+          <File name="edit.js" />
+          <File name="render.php" />
+        </Folder>
+      </Folder>
+      <Folder name="build" />
+      <File name="blocks-agency.php" />
+      <File name="package.json" />
+    </Folder>
+  </Folder>
+</Files>
+
+<Callout type="error" title="Важно">
+  Папка `build/` содержит скомпилированные React-скрипты. **Никогда не редактируйте файлы внутри `build/` вручную.** Вся разработка ведется строго в папке `src/`.
+</Callout>

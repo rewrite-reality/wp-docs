@@ -1,0 +1,136 @@
+---
+title: Интеграции и AJAX
+description: Как бойлерплейт общается с внешним миром — безопасный AJAX роутер, REST API, Telegram и Algolia.
+---
+
+# Интеграции и AJAX
+
+В этом разделе описывается, как Boilerplate обрабатывает асинхронные запросы от фронтенда (AJAX), интегрируется с формами (Contact Form 7), отправляет уведомления в Telegram и работает с SEO/Аналитикой.
+
+Вся эта логика изолирована в папках `mu-plugins/agency-b2b-core/ajax/` и `mu-plugins/agency-b2b-core/integrations/`.
+
+---
+
+## 1. AJAX и REST API (Папка `ajax/`)
+
+### 1.1 Безопасный AJAX Router (`ajax-router.php`)
+В WordPress AJAX запросы исторически идут через `admin-ajax.php`. Чтобы не плодить десятки разрозненных хуков и дублирование проверок безопасности, мы используем паттерн "Router".
+
+**Как это работает:**
+На фронтенде JS отправляет запрос с `action: 'agency_ajax_router'` и параметром `route` (например, `catalog_filter`). В `ajax-router.php` один центральный хук ловит запрос и маршрутизирует его по классам-контроллерам:
+
+```php
+add_action('wp_ajax_agency_ajax_router', 'agency_ajax_router_handler');
+add_action('wp_ajax_nopriv_agency_ajax_router', 'agency_ajax_router_handler');
+
+function agency_ajax_router_handler() {
+    // 1. Обязательная проверка Nonce (защита от CSRF)
+    if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'agency_nonce')) {
+        wp_send_json_error(['message' => 'Security check failed.']);
+    }
+
+    $route = sanitize_text_field($_POST['route']);
+
+    // 2. Маршрутизация (Switch-Case)
+    switch ($route) {
+        case 'catalog_filter':
+            // Передаем управление контроллеру каталога
+            Catalog_Controller::filter_items($_POST); 
+            break;
+        default:
+            wp_send_json_error(['message' => 'Unknown route.']);
+    }
+}
+```
+
+<Callout type="info">
+  **Почему это хорошо?** Вся логика валидации Nonce и маршрутизации находится в одном месте. Мы точно знаем единую точку входа всех AJAX-запросов и избегаем хаоса в хуках.
+</Callout>
+
+### 1.2 REST API Поиск (`rest-search.php`)
+Для нативного "живого поиска" по сайту мы используем WP REST API, так как он быстрее и лучше кешируется, чем `admin-ajax`. Скрипт регистрирует кастомный эндпоинт `/wp-json/agency/v1/search`.
+
+```php
+register_rest_route( 'agency/v1', '/search', array(
+    'methods'  => WP_REST_Server::READABLE,
+    'callback' => 'agency_rest_search_handler',
+    'permission_callback' => '__return_true', // Открыт для всех
+) );
+```
+Внутри `agency_rest_search_handler` реализован кастомный `WP_Query`, который ищет не только по заголовкам, но и по артикулу (мета-полю `catalog_sku`).
+
+---
+
+## 2. Интеграции (Папка `integrations/`)
+
+### 2.1 Перехват лидов из CF7 (`cf7-leads.php`)
+Contact Form 7 — отличный плагин, но по умолчанию он просто отправляет письма. Мы перехватываем отправку и сохраняем заявки в базу WordPress как "Лиды" (скрытый CPT).
+
+Мы используем хук `wpcf7_before_send_mail`:
+```php
+add_action( 'wpcf7_before_send_mail', 'agency_save_cf7_lead' );
+
+function agency_save_cf7_lead( $contact_form ) {
+    $submission = WPCF7_Submission::get_instance();
+    if ( $submission ) {
+        $posted_data = $submission->get_posted_data();
+        
+        // Создаем скрытый CPT "Leads"
+        $lead_id = wp_insert_post( array(
+            'post_type'   => 'agency_lead',
+            'post_title'  => 'Заявка от ' . sanitize_text_field( $posted_data['your-name'] ),
+            'post_status' => 'private', // Никто, кроме админа, не увидит
+        ) );
+
+        // Сохраняем поля формы как мета-данные
+        update_post_meta( $lead_id, 'lead_phone', sanitize_text_field( $posted_data['your-phone'] ) );
+    }
+}
+```
+
+### 2.2 Уведомления в Telegram (`telegram.php`)
+Для мгновенного оповещения менеджеров реализована отправка через Telegram Bot API. Мы используем нативный `wp_remote_post` (а не cURL напрямую):
+
+```php
+function agency_send_telegram_alert( $message ) {
+    $bot_token = carbon_get_theme_option( 'tg_bot_token' );
+    $chat_id   = carbon_get_theme_option( 'tg_chat_id' );
+
+    if ( ! $bot_token || ! $chat_id ) return;
+
+    $api_url = "https://api.telegram.org/bot{$bot_token}/sendMessage";
+    
+    wp_remote_post( $api_url, array(
+        'body' => array(
+            'chat_id'    => $chat_id,
+            'text'       => $message,
+            'parse_mode' => 'HTML',
+        )
+    ) );
+}
+```
+*Настройки (Токен и Chat ID) задаются контент-менеджером в админке через Theme Options (Carbon Fields).*
+
+### 2.3 RankMath SEO (`rankmath.php`)
+Чтобы стандартные "хлебные крошки" RankMath вписывались в нашу БЭМ-верстку, мы перехватываем их генерацию через фильтр `rank_math/frontend/breadcrumb/html`. 
+Это позволяет регулярными выражениями заменять классы `.separator` на наши классы из темы и оборачивать крошки в `<nav>`, избавляя верстальщика от написания костыльного CSS.
+
+### 2.4 Аналитика (Метрика и GTM)
+Файл `analytics.php` отвечает за вставку кодов трекинга из админки (Carbon Fields). Скрипт цепляется к хукам `wp_head` и `wp_body_open` и напрямую выводит сырой JS-код из базы. Это избавляет от необходимости использовать плагины вроде "Insert Headers and Footers".
+
+---
+
+## 3. Мощный поиск: Интеграция с Algolia
+
+Для проектов с десятками тысяч товаров мы используем **Algolia** вместо нативного поиска WP (папка `integrations/algolia/`).
+
+### Бэкенд: Синхронизация данных
+Синхронизация происходит автоматически "под капотом":
+*   **На лету:** Плагин слушает хуки `save_post` и `before_delete_post`. Когда менеджер публикует товар, скрипт форматирует данные (картинку, цену, таксономии) в JSON и отправляет PUSH-запрос в Algolia.
+*   **Пакетная загрузка:** Для первичной выгрузки тысяч товаров написана WP-CLI команда `wp agency algolia sync_all`, которая отправляет товары порциями (батчами) по 100 штук, избегая тайм-аутов сервера.
+
+### Фронтенд: Мгновенный рендер
+На фронтенде мы **вообще не используем PHP** для поиска Algolia.
+1. Плагин загружает легковесный JS-клиент `algoliasearch-lite` через CDN.
+2. Через `wp_localize_script` передаются публичные ключи API (Search-Only).
+3. JS напрямую (за миллисекунды) обращается к серверам Algolia и выводит результаты, минуя бэкенд WordPress, MySQL и PHP. Это обеспечивает феноменальную скорость поиска!

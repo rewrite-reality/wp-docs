@@ -1,0 +1,202 @@
+---
+title: "Рецепт: Создание Архива CPT"
+description: Пошаговое руководство по созданию CPT, архива, фильтров и пагинации через AJAX Router.
+---
+
+# Создание кастомного CPT и Архива с фильтрами
+
+В этом руководстве мы пошагово разберем, как создать новый тип записи (Custom Post Type), например, `portfolio`, вывести его на фронтенд в виде архива, добавить фильтрацию, сортировку, пагинацию и хлебные крошки. 
+
+## 🤖 Промпт-генератор для ИИ
+Если вы не хотите писать код руками, скопируйте этот шаблон и отправьте его ИИ-агенту (ChatGPT, Claude):
+
+```text
+Ты Senior WordPress Developer. Моя задача — создать новый Custom Post Type: [НАЗВАНИЕ, например, "Портфолио"] и вывести для него архивную страницу с AJAX-фильтрацией. Мы используем архитектуру Boilerplate.
+
+Требования:
+1. Создай файл регистрации CPT для `mu-plugins/agency-b2b-core/post-types/`. Используй `show_in_rest = false` (отключаем Gutenberg).
+2. Напиши шаблон архива `archive-[slug].php` для темы. Включи вызов функции хлебных крошек `agency_ecommerce_breadcrumbs()`, форму фильтра, сетку и AJAX-пагинацию `agency_ecommerce_pagination()`.
+3. Создай контроллер AJAX в `mu-plugins/agency-b2b-core/ajax/class-[slug]-ajax.php` для обработки пагинации и сортировки, возвращающий HTML сетки и HTML пагинации.
+4. Напиши код регистрации роута для `ajax-router.php`.
+```
+
+---
+## Шаг 1. Регистрация CPT в Ядре
+
+Все типы записей регистрируются в `mu-plugins/agency-b2b-core/post-types/`. Мы будем делать **Structured CPT**, поэтому визуальный редактор нужно отключить.
+
+1. Создайте файл `mu-plugins/agency-b2b-core/post-types/portfolio.php`.
+2. Напишите код регистрации:
+
+```php
+<?php
+declare(strict_types=1);
+
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+add_action( 'init', 'agency_register_portfolio_cpt' );
+function agency_register_portfolio_cpt() {
+    $labels = array(
+        'name'               => 'Портфолио',
+        'singular_name'      => 'Проект',
+        'menu_name'          => 'Портфолио'
+        // ... остальные лейблы
+    );
+
+    $args = array(
+        'labels'              => $labels,
+        'public'              => true,
+        'has_archive'         => true,
+        'rewrite'             => array( 'slug' => 'portfolio' ),
+        'menu_icon'           => 'dashicons-portfolio',
+        'menu_position'       => 6,
+        'supports'            => array( 'title', 'thumbnail', 'excerpt' ),
+        
+        // 🔥 Отключаем Gutenberg, чтобы менеджер не сломал верстку карточки
+        'show_in_rest'        => false, 
+    );
+
+    register_post_type( 'portfolio', $args );
+}
+```
+
+3. **Обязательно** подключите этот файл в загрузчике. Откройте `mu-plugins/agency-b2b-core/agency-core-loader.php` и найдите метод `load_files()`. В массиве автозагрузчика добавьте вызов вашего файла.
+
+---
+
+## Шаг 2. Создание шаблона Архива в Теме
+
+Переходим в визуальный слой: `themes/agency-starter-theme/`. Чтобы вывести страницу `/portfolio/`, создайте файл `archive-portfolio.php`.
+
+```php
+<?php
+/**
+ * Шаблон архива Портфолио
+ */
+get_header(); ?>
+
+<main class="main">
+    <section class="section archive-portfolio">
+        <div class="container">
+            
+            <!-- 1. Хлебные крошки -->
+            <?php 
+            if ( function_exists( 'agency_ecommerce_breadcrumbs' ) ) {
+                // Функция сама обернет крошки в <nav> и подхватит RankMath
+                agency_ecommerce_breadcrumbs(); 
+            } 
+            ?>
+
+            <header class="archive-header">
+                <h1 class="h1">Наши проекты</h1>
+            </header>
+
+            <!-- 2. Форма фильтрации и сортировки (Отправляет данные по AJAX) -->
+            <form class="portfolio-filter" id="portfolioFilterForm" data-ajax-form>
+                <div class="filter-controls">
+                    <select name="sort_by" class="form-select">
+                        <option value="date_desc">Сначала новые</option>
+                        <option value="date_asc">Сначала старые</option>
+                    </select>
+                </div>
+            </form>
+
+            <!-- 3. Сетка карточек -->
+            <div class="portfolio-grid" id="portfolioGrid" data-ajax-container>
+                <?php if ( have_posts() ) : ?>
+                    <?php while ( have_posts() ) : the_post(); ?>
+                        <!-- Подключаем компонент карточки -->
+                        <?php get_template_part( 'template-parts/portfolio/card' ); ?>
+                    <?php endwhile; ?>
+                <?php else : ?>
+                    <p>Проекты не найдены.</p>
+                <?php endif; ?>
+            </div>
+
+            <!-- 4. Пагинация -->
+            <div id="portfolioPagination">
+                <?php 
+                if ( function_exists( 'agency_ecommerce_pagination' ) ) {
+                    // Генерирует AJAX-ready кнопки (<a data-ajax="link"...>)
+                    agency_ecommerce_pagination(); 
+                } 
+                ?>
+            </div>
+
+        </div>
+    </section>
+</main>
+
+<?php get_footer(); ?>
+```
+
+---
+
+## Шаг 3. Обработка Фильтрации через AJAX Router
+
+Чтобы фильтр и пагинация работали без перезагрузки страницы, мы используем паттерн "AJAX Router".
+
+<Steps>
+  <Step title="Создание контроллера">
+    Создайте файл `mu-plugins/agency-b2b-core/ajax/class-portfolio-ajax.php`:
+    
+    ```php
+    <?php
+    class Portfolio_Ajax {
+        public static function filter_projects( $post_data ) {
+            $paged = isset($post_data['paged']) ? absint($post_data['paged']) : 1;
+            $sort  = sanitize_text_field($post_data['sort_by'] ?? 'date_desc');
+
+            $args = array(
+                'post_type'      => 'portfolio',
+                'post_status'    => 'publish',
+                'posts_per_page' => 9,
+                'paged'          => $paged,
+                'orderby'        => 'date',
+                'order'          => ($sort === 'date_asc') ? 'ASC' : 'DESC',
+            );
+
+            $query = new WP_Query( $args );
+
+            ob_start();
+            if ( $query->have_posts() ) {
+                while ( $query->have_posts() ) {
+                    $query->the_post();
+                    get_template_part( 'template-parts/portfolio/card' );
+                }
+            } else {
+                echo '<p>Ничего не найдено.</p>';
+            }
+            $html = ob_clean(); // Сетка карточек
+
+            ob_start();
+            if ( function_exists( 'agency_ecommerce_pagination' ) ) {
+                agency_ecommerce_pagination( $query );
+            }
+            $pagination = ob_clean(); // HTML пагинации
+
+            wp_reset_postdata();
+
+            wp_send_json_success([
+                'html' => $html,
+                'pagination' => $pagination
+            ]);
+        }
+    }
+    ```
+  </Step>
+  <Step title="Регистрация в Router">
+    Зарегистрируйте этот класс в `ajax-router.php`:
+    ```php
+    switch ($route) {
+        // ... другие роуты
+        case 'portfolio_filter':
+            Portfolio_Ajax::filter_projects($_POST);
+            break;
+    }
+    ```
+  </Step>
+  <Step title="Связка на фронтенде">
+    В вашем JS-файле темы перехватите сабмит формы `<form id="portfolioFilterForm">` и клики по ссылкам `<a data-ajax="link">`. Отправьте POST-запрос на `admin-ajax.php` с `action: 'agency_ajax_router'` и `route: 'portfolio_filter'`. Полученный HTML-ответ вставьте в `data-ajax-container`.
+  </Step>
+</Steps>
