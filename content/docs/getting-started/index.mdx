@@ -1,0 +1,47 @@
+---
+title: Установка и Git Workflow
+description: Как правильно развернуть проект и настроить Git.
+---
+
+# Быстрый старт и работа с Git
+
+При старте нового проекта на базе Boilerplate самое важное — правильно настроить Git-связи, чтобы в будущем безболезненно получать обновления бэкенда.
+
+## Настройка Git (Upstream vs Origin)
+
+<Tabs items={['1. Клонирование', '2. Настройка remote', '3. Привязка клиента']}>
+  <Tab value="1. Клонирование">
+    Сначала клонируем основной репозиторий бойлерплейта:
+    
+    ```bash
+    git clone git@github.com:agency/boilerplate.git new-client-site
+    cd new-client-site
+    ```
+  </Tab>
+  <Tab value="2. Настройка remote">
+    Переименовываем `origin` в `upstream` (это будет источник обновлений ядра):
+    
+    ```bash
+    git remote rename origin upstream
+    ```
+  </Tab>
+  <Tab value="3. Привязка клиента">
+    Добавляем новый `origin` — репозиторий текущего клиента:
+    
+    ```bash
+    git remote add origin git@github.com:client/repo.git
+    git push -u origin main
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="warning">
+  Никогда не делайте push напрямую в `upstream`, если вы пишете специфичный код для клиента! Все клиентские фичи пушатся только в `origin`.
+</Callout>
+
+## Структура папок проекта
+
+Основа архитектуры Boilerplate построена на разделении плагинов и темы:
+* `mu-plugins/agency-b2b-core/` — ядро бойлерплейта (читать можно, менять нельзя).
+* `mu-plugins/client-core.php` — кастомная логика текущего клиента.
+* `themes/agency-starter-theme/` — визуальный слой и стили.

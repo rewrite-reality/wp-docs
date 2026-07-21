@@ -1,0 +1,11 @@
+{
+  "title": "Boilerplate Docs",
+  "pages": [
+    "index",
+    "getting-started",
+    "core-architecture",
+    "cpt-and-data",
+    "frontend-and-blocks",
+    "workflow"
+  ]
+}

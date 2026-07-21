@@ -1,0 +1,58 @@
+---
+title: Правило Ядра и Feature Toggles
+description: Как работает ядро и почему нельзя удалять код.
+---
+
+# Архитектура Ядра
+
+Самая частая боль при работе с Boilerplate — конфликты Git при получении обновлений. Чтобы этого избежать, мы используем **Feature Toggles**.
+
+## Почему нельзя удалять файлы из ядра?
+
+Если вы удалите файл `cpt-cases.php` в папке клиента, а затем мы обновим этот файл в `upstream` (бойлерплейте), Git выдаст конфликт при слиянии: *"В источнике этот файл обновили, а тут его кто-то стер"*.
+
+<Callout type="info">
+  **Решение:** Мы переходим от парадигмы *"Удалить лишнее"* к парадигме *"Включить нужное"*.
+</Callout>
+
+## Использование Feature Toggles
+
+Все CPT, блоки и интеграции в ядре по умолчанию **выключены**. Чтобы включить их для клиента, нужно явно запросить это в теме:
+
+<Tabs items={['В ядре (mu-plugins)', 'В теме (functions.php)']}>
+  <Tab value="В ядре (mu-plugins)">
+    ```php
+    // mu-plugins/agency-b2b-core/core.php
+    add_action('init', function() {
+        if (current_theme_supports('agency-cpt-cases')) {
+            require_once __DIR__ . '/includes/cpt-cases.php';
+        }
+    });
+    ```
+  </Tab>
+  <Tab value="В теме (functions.php)">
+    ```php
+    // themes/agency-starter-theme/functions.php
+    add_action('after_setup_theme', function() {
+        // Включаем нужные фичи ядра для ЭТОГО клиента
+        add_theme_support('agency-cpt-cases');
+    });
+    ```
+  </Tab>
+</Tabs>
+
+Если клиенту **не нужны** кейсы — мы просто не пишем `add_theme_support('agency-cpt-cases')`. Код в `mu-plugins` остается нетронутым, и обновления из `upstream` приходят без конфликтов.
+
+## Системные настройки (wp-config.php)
+
+Для более жестких интеграций (например, отключение WooCommerce) можно использовать константы:
+
+```php
+// В wp-config.php
+define('AGENCY_ENABLE_WOO', false);
+
+// В ядре
+if (defined('AGENCY_ENABLE_WOO') && AGENCY_ENABLE_WOO === true) {
+    // Подключаем логику
+}
+```
